@@ -40,8 +40,8 @@ if not WEAVIATE_URL:
     WEAVIATE_URL = "https://demo.weaviate.cloud"
 
 # OpenAI configuration
-OPENAI_API_KEY = "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"
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4-1-mini")
 if not OPENAI_API_KEY:
     print("WARNING: OPENAI_API_KEY environment variable is not set. Using demo mode.")
     OPENAI_API_KEY = "demo_key"
