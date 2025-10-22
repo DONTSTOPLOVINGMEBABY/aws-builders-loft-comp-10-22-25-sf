@@ -8,11 +8,16 @@ import json
 import os
 import re
 import requests
+from pydantic import BaseModel, Field
 
 # --- LlamaIndex & Agents ---
 from llama_index.core.tools import FunctionTool
-from llama_index.llms.openai import OpenAI  # OpenAI-compatible; works with Friendli base_url
 from llama_index.core.program import FunctionCallingProgram
+from llama_index.core.llms import LLM, ChatMessage, MessageRole
+from llama_index.core.llms.callbacks import llm_chat_callback
+
+# --- Friendli AI ---
+from friendli import SyncFriendli
 
 # --- Weaviate ---
 import weaviate
@@ -32,61 +37,113 @@ if not WEAVIATE_API_KEY:
 if not WEAVIATE_URL:
     raise ValueError("WEAVIATE_URL environment variable is required but not set")
 
-# FriendliAI (OpenAI-compatible) for LlamaIndex
-FRIENDLI_BASE_URL = os.environ.get("FRIENDLI_BASE_URL")  # e.g., https://api.friendli.ai/serverless/v1 or /dedicated/v1
-FRIENDLI_API_KEY = os.environ.get("FRIENDLI_API_KEY")
-FRIENDLI_MODEL   = os.environ.get("FRIENDLI_MODEL", "meta-llama-3.1-8B-instruct")
+# FriendliAI configuration
+FRIENDLI_MODEL = os.environ.get("FRIENDLI_MODEL", "meta-llama-3.1-8B-instruct")
+# FRIENDLI_TEAM is hardcoded below in the FriendliLLM initialization
 
-if not (FRIENDLI_BASE_URL and FRIENDLI_API_KEY):
-    raise ValueError("Set FRIENDLI_BASE_URL and FRIENDLI_API_KEY for the LLM (Friendli OpenAI-compatible).")
+# Custom Friendli LLM wrapper for LlamaIndex
+class FriendliLLM(LLM):
+    def __init__(self, token: str, model: str, team: str, **kwargs):
+        super().__init__(**kwargs)
+        self._client = SyncFriendli(token=token)
+        self._model = model
+        self._team = team
 
-# Configure LlamaIndex's OpenAI wrapper to point at Friendli
-os.environ["OPENAI_BASE_URL"] = FRIENDLI_BASE_URL
-os.environ["OPENAI_API_KEY"]  = FRIENDLI_API_KEY
-llm = OpenAI(model=FRIENDLI_MODEL)
+    @property
+    def metadata(self):
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            is_function_calling_model=True,  # Assume it supports function calling
+            context_window=32768,  # Default context window
+            num_output=4096,  # Default max output tokens
+        )
+
+    @llm_chat_callback()
+    def chat(self, messages, **kwargs):
+        # Convert LlamaIndex messages to Friendli format
+        friendli_messages = []
+        for msg in messages:
+            if msg.role == MessageRole.USER:
+                friendli_messages.append({"role": "user", "content": msg.content})
+            elif msg.role == MessageRole.ASSISTANT:
+                friendli_messages.append({"role": "assistant", "content": msg.content})
+            elif msg.role == MessageRole.SYSTEM:
+                friendli_messages.append({"role": "system", "content": msg.content})
+
+        # Call Friendli API
+        response = self._client.chat.completions.create(
+            model=self._model,
+            messages=friendli_messages,
+            max_tokens=kwargs.get("max_tokens", 4096),
+            temperature=kwargs.get("temperature", 0.7),
+            x_friendli_team=self._team,
+        )
+
+        # Convert response back to LlamaIndex format
+        content = response.choices[0].message.content
+        return ChatMessage(role=MessageRole.ASSISTANT, content=content)
+
+    def complete(self, prompt, **kwargs):
+        # For simple completion, wrap in a chat message
+        messages = [ChatMessage(role=MessageRole.USER, content=prompt)]
+        response = self.chat(messages, **kwargs)
+        return response.content
+
+    # Async methods (required by abstract base class)
+    async def achat(self, messages, **kwargs):
+        # For now, just call the sync version
+        # In a real implementation, you'd want to use async Friendli client
+        return self.chat(messages, **kwargs)
+
+    async def acomplete(self, prompt, **kwargs):
+        # For simple completion, wrap in a chat message
+        messages = [ChatMessage(role=MessageRole.USER, content=prompt)]
+        response = await self.achat(messages, **kwargs)
+        return response.content
+
+    # Streaming methods (required by abstract base class)
+    def stream_chat(self, messages, **kwargs):
+        # For now, return a single response as a generator
+        # In a real implementation, you'd want to use streaming from Friendli
+        response = self.chat(messages, **kwargs)
+        yield response
+
+    def stream_complete(self, prompt, **kwargs):
+        # For simple completion, wrap in a chat message
+        messages = [ChatMessage(role=MessageRole.USER, content=prompt)]
+        for response in self.stream_chat(messages, **kwargs):
+            yield response.content
+
+    async def astream_chat(self, messages, **kwargs):
+        # For now, return a single response as a generator
+        # In a real implementation, you'd want to use async streaming from Friendli
+        response = await self.achat(messages, **kwargs)
+        yield response
+
+    async def astream_complete(self, prompt, **kwargs):
+        # For simple completion, wrap in a chat message
+        messages = [ChatMessage(role=MessageRole.USER, content=prompt)]
+        async for response in self.astream_chat(messages, **kwargs):
+            yield response.content
+
+# Initialize the Friendli LLM
+llm = FriendliLLM(token="flp_DMcypemHFEKjm0qZqmZrZgkB1rqoAEAGB9BYiDjmaWjw18", model="dep30dsnycth0w2", team="4sGGjIpb9Aln")
 
 # --------------------------------------------------------------------------------------
-# Pydantic-like data classes (simple dicts are fine; we use FunctionCallingProgram)
+# Pydantic data classes for structured output
 # --------------------------------------------------------------------------------------
 
-# We'll provide JSON schema inline to FunctionCallingProgram, so no pydantic import is required.
-RECOMMENDATION_JSON_SCHEMA: Dict[str, Any] = {
-    "name": "Recommendation",
-    "description": "Structured recommendation for preclinical compound-combination risk.",
-    "strict": True,
-    "schema": {
-        "type": "object",
-        "properties": {
-            "compounds": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Compound names under consideration."
-            },
-            "risk_level": {
-                "type": "string",
-                "enum": ["Low", "Moderate", "High", "Unknown"],
-                "description": "Overall interaction risk level."
-            },
-            "rationale": {"type": "string"},
-            "evidence": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "source": {"type": "string"},
-                        "title":  {"type": "string"},
-                        "url":    {"type": "string"}
-                    },
-                    "required": ["source", "title"],
-                    "additionalProperties": True
-                }
-            },
-            "suggested_next_experiment": {"type": "string"}
-        },
-        "required": ["compounds", "risk_level", "rationale", "evidence", "suggested_next_experiment"],
-        "additionalProperties": False
-    }
-}
+class EvidenceSource(BaseModel):
+    source: str = Field(description="Source of the evidence")
+    title: str = Field(description="Title of the evidence")
+    url: Optional[str] = Field(default="", description="URL of the evidence")
+
+class Recommendation(BaseModel):
+    compounds: List[str] = Field(description="Compound names under consideration")
+    risk_level: str = Field(description="Overall interaction risk level", pattern="^(Low|Moderate|High|Unknown)$")
+    rationale: str = Field(description="Rationale for the risk assessment")
+    evidence: List[EvidenceSource] = Field(description="Sources of evidence used in the analysis")
+    suggested_next_experiment: str = Field(description="Suggested next experiment")
 
 # --------------------------------------------------------------------------------------
 # Weaviate schema setup
@@ -475,23 +532,23 @@ def run_advisor(
 
     # 4) Synthesize final JSON with FunctionCallingProgram (schema-enforced)
     synth = FunctionCallingProgram.from_defaults(
-        output_json_schema=RECOMMENDATION_JSON_SCHEMA,
-        llm=llm
+        output_cls=Recommendation,
+        llm=llm,
+        prompt_template_str="For internal R&D decision support only — not clinical advice.\nGiven the following context, return a Recommendation JSON.\n\nCompounds: {compounds}\n\nInternal retrieval:\n{internal_answer}\n\nExternal evidence (titles & links):\n{evidence_dicts}\n\nToxicology rules result:\n{tox}\n\nUse conservative language. Always include a suggested_next_experiment that is safe and incremental."
     )
     evidence_for_llm = [
-        {"source": h["source"], "title": h["title"], "url": h.get("url", "")}
+        EvidenceSource(source=h["source"], title=h["title"], url=h.get("url", ""))
         for h in (pubmed_hits + ctgov_hits)
     ]
+    
+    # Convert evidence to dict for JSON serialization in prompt
+    evidence_dicts = [{"source": e.source, "title": e.title, "url": e.url} for e in evidence_for_llm]
+    
     final_json = synth(
-        prompt=(
-            "For internal R&D decision support only — not clinical advice.\n"
-            "Given the following context, return a Recommendation JSON.\n\n"
-            f"Compounds: {', '.join(compounds)}\n\n"
-            f"Internal retrieval:\n{internal_answer}\n\n"
-            f"External evidence (titles & links):\n{json.dumps(evidence_for_llm, indent=2)}\n\n"
-            f"Toxicology rules result:\n{json.dumps(tox, indent=2)}\n\n"
-            "Use conservative language. Always include a suggested_next_experiment that is safe and incremental."
-        )
+        compounds=', '.join(compounds),
+        internal_answer=internal_answer,
+        evidence_dicts=json.dumps(evidence_dicts, indent=2),
+        tox=json.dumps(tox, indent=2)
     )
 
     # 5) Log & return
@@ -516,6 +573,7 @@ if __name__ == "__main__":
             # Replace with relevant pages; left empty by default to avoid scraping on run
             # "https://pubmed.ncbi.nlm.nih.gov/12345678/",
             # "https://clinicaltrials.gov/study/NCT04280705",
+            "https://clinicaltrials.gov/study/NCT04280705"
         ]
         if demo_urls:
             print("Ingesting demo URLs…")
