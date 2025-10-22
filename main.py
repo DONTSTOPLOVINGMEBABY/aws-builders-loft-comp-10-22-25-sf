@@ -16,8 +16,8 @@ from llama_index.core.tools import FunctionTool
 from llama_index.core.program import LLMTextCompletionProgram  # text-completion program (no tool-calling)
 from llama_index.core.llms import LLM, ChatMessage, MessageRole, ChatResponse
 
-# --- Friendli AI ---
-from friendli import SyncFriendli
+# --- OpenAI ---
+from openai import OpenAI
 
 # --- Weaviate ---
 import weaviate
@@ -39,20 +39,22 @@ if not WEAVIATE_URL:
     print("WARNING: WEAVIATE_URL environment variable is not set. Using demo mode.")
     WEAVIATE_URL = "https://demo.weaviate.cloud"
 
-# FriendliAI configuration
-FRIENDLI_MODEL = os.environ.get("FRIENDLI_MODEL", "meta-llama-3.1-8B-instruct")
-# FRIENDLI_TEAM is hardcoded below in the FriendliLLM initialization
+# OpenAI configuration
+OPENAI_API_KEY = "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"
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+if not OPENAI_API_KEY:
+    print("WARNING: OPENAI_API_KEY environment variable is not set. Using demo mode.")
+    OPENAI_API_KEY = "demo_key"
 
 # --------------------------------------------------------------------------------------
-# Custom Friendli LLM wrapper for LlamaIndex
+# Custom OpenAI LLM wrapper for LlamaIndex
 # --------------------------------------------------------------------------------------
 
-class FriendliLLM(LLM):
-    def __init__(self, token: str, model: str, team: str, **kwargs):
+class OpenAILLM(LLM):
+    def __init__(self, api_key: str, model: str, **kwargs):
         super().__init__(**kwargs)
-        self._client = SyncFriendli(token=token)
+        self._client = OpenAI(api_key=api_key)
         self._model = model
-        self._team = team
         self._last_response = None
 
     @property
@@ -67,35 +69,27 @@ class FriendliLLM(LLM):
         )
 
     def chat(self, messages, **kwargs):
-    # Convert LlamaIndex messages to Friendli format
-        friendli_messages = []
+        # Convert LlamaIndex messages to OpenAI format
+        openai_messages = []
         for msg in messages:
             if msg.role == MessageRole.USER:
-                friendli_messages.append({"role": "user", "content": msg.content})
+                openai_messages.append({"role": "user", "content": msg.content})
             elif msg.role == MessageRole.ASSISTANT:
-                friendli_messages.append({"role": "assistant", "content": msg.content})
+                openai_messages.append({"role": "assistant", "content": msg.content})
             elif msg.role == MessageRole.SYSTEM:
-                friendli_messages.append({"role": "system", "content": msg.content})
+                openai_messages.append({"role": "system", "content": msg.content})
 
-        # Call Friendli Dedicated chat completions
-        res = self._client.dedicated.chat.complete(
-            messages=friendli_messages,
-            model=self._model,  # <-- your dedicated endpoint id, e.g. "dep30dsnycth0w2"
+        # Call OpenAI chat completions
+        res = self._client.chat.completions.create(
+            messages=openai_messages,
+            model=self._model,  # <-- your OpenAI model name, e.g. "gpt-3.5-turbo"
             max_tokens=kwargs.get("max_tokens", 4096),
             temperature=kwargs.get("temperature", 0.7),
-            x_friendli_team=self._team,  # optional but recommended
         )
 
         # Convert response back to LlamaIndex format
-        # Handle different response formats from Friendli API
-        if hasattr(res.choices[0], "message"):
-            message = res.choices[0].message
-            if hasattr(message, "content"):
-                content = message.content
-            else:
-                content = message["content"]
-        else:
-            content = res.choices[0].message.content
+        # Handle OpenAI response format
+        content = res.choices[0].message.content
         
         # Clean up the content to extract only valid JSON if needed
         content = self._extract_json_from_response(content)
@@ -150,15 +144,8 @@ class FriendliLLM(LLM):
     def get_last_response_content(self):
         """Get just the content from the last response."""
         if self._last_response:
-            # Handle different response formats from Friendli API
-            if hasattr(self._last_response.choices[0], "message"):
-                message = self._last_response.choices[0].message
-                if hasattr(message, "content"):
-                    return message.content
-                else:
-                    return message["content"]
-            else:
-                return self._last_response.choices[0].message.content
+            # Handle OpenAI response format
+            return self._last_response.choices[0].message.content
         return None
     
     def _extract_json_from_response(self, content: str) -> str:
@@ -226,8 +213,8 @@ class FriendliLLM(LLM):
         # If no JSON found, return original content
         return content
 
-# Initialize the Friendli LLM (intentionally hardcoded per original)
-llm = FriendliLLM(token="flp_DMcypemHFEKjm0qZqmZrZgkB1rqoAEAGB9BYiDjmaWjw18", model="dep30dsnycth0w2", team="4sGGjIpb9Aln")
+# Initialize the OpenAI LLM
+llm = OpenAILLM(api_key=OPENAI_API_KEY, model=OPENAI_MODEL)
 
 # --------------------------------------------------------------------------------------
 # Pydantic data classes for structured output
@@ -687,7 +674,7 @@ def demonstrate_response_usage():
     This shows how to access the JSON structure you mentioned.
     """
     # Example of how to access the response after calling the advisor
-    compounds = ["Compound A", "Compound B"]
+    compounds = ["Warfarin", "Digoxin"]
     
     # After running the advisor, you get a structured response
     # The response contains the JSON structure you showed:
@@ -804,7 +791,7 @@ def test_json_extraction():
 
 if __name__ == "__main__":
     # Check if we're in demo mode
-    demo_mode = not os.environ.get("WEAVIATE_API_KEY") or not os.environ.get("WEAVIATE_URL")
+    demo_mode = False
     
     if demo_mode:
         print("=== DEMO MODE ===")
@@ -833,8 +820,8 @@ if __name__ == "__main__":
             # Optional: ingest a couple of pages (swap with your real sources)
             demo_urls = [
                 # Replace with relevant pages; left empty by default to avoid scraping on run
-                # "https://pubmed.ncbi.nlm.nih.gov/12345678/",
-                # "https://clinicaltrials.gov/study/NCT04280705",
+                "https://pubmed.ncbi.nlm.nih.gov/12345678/",
+                "https://clinicaltrials.gov/study/NCT04280705",
                 "https://clinicaltrials.gov/study/NCT04280705"
             ]
             if demo_urls:
