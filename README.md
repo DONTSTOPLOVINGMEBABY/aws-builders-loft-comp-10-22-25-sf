@@ -1,6 +1,6 @@
 # Drug Interaction Advisor
 
-A multi-agent system for analyzing drug interactions using Weaviate vector database, OpenAI, and external APIs (PubMed, ClinicalTrials.gov).
+A multi-agent system for analyzing drug interactions using Weaviate's vector database, OpenAI, and external APIs (PubMed, ClinicalTrials.gov).
 
 ## Environment Variables
 
