@@ -1,0 +1,181 @@
+# Core LlamaIndex packages
+llama-index-core==0.14.5
+llama-index-llms-openai==0.6.5
+llama-index-readers-web==0.5.5
+llama-index-utils-workflow==0.4.1
+llama-index-workflows==2.8.3
+llama-index-instrumentation==0.4.2
+
+# Weaviate client and agents
+weaviate-client[agents]==4.17.0
+weaviate-agents==1.1.0
+
+# OpenAI
+openai==1.109.1
+
+# Web scraping and HTTP
+requests==2.32.5
+httpx==0.28.1
+httpx-sse==0.4.3
+aiohttp==3.13.1
+beautifulsoup4==4.14.2
+lxml==6.0.2
+lxml_html_clean==0.4.3
+html2text==2024.2.26
+markdownify==1.2.0
+
+# Data processing and validation
+pydantic==2.12.3
+pydantic_core==2.41.4
+dataclasses-json==0.6.7
+dirtyjson==1.0.8
+jsonpickle==4.1.1
+
+# Async support
+aiosqlite==0.21.0
+nest-asyncio==1.6.0
+anyio==4.11.0
+trio==0.31.0
+trio-websocket==0.12.2
+
+# Network and HTTP utilities
+aiohappyeyeballs==2.6.1
+aiosignal==1.4.0
+certifi==2025.10.5
+charset-normalizer==3.4.4
+h11==0.16.0
+httpcore==1.0.9
+idna==3.11
+multidict==6.7.0
+sniffio==1.3.1
+urllib3==2.5.0
+yarl==1.22.0
+
+# WebSocket support
+websocket-client==1.9.0
+websockets==15.0.1
+wsproto==1.2.0
+
+# Authentication and security
+Authlib==1.6.5
+cryptography==46.0.3
+PySocks==1.7.1
+
+# Text processing and NLP
+nltk==3.9.2
+jieba3k==0.35.1
+tinysegmenter==0.3
+tldextract==5.3.0
+regex==2025.10.23
+
+# Database and storage
+SQLAlchemy==2.0.44
+
+# Utilities and helpers
+tenacity==9.1.2
+tqdm==4.67.1
+click==8.3.0
+colorama==0.4.6
+python-dotenv==1.1.1
+python-dateutil==2.9.0.post0
+PyYAML==6.0.3
+validators==0.35.0
+
+# Development and debugging
+ipython==9.6.0
+ipython_pygments_lexers==1.1.1
+rich==14.2.0
+pyvis==0.3.2
+
+# Browser automation (for web scraping)
+playwright==1.55.0
+selenium==4.37.0
+chromedriver-autoinstaller==0.6.4
+
+# Additional web scraping tools
+newspaper3k==0.2.8
+feedfinder2==0.0.4
+feedparser==6.0.12
+firecrawl-py==4.5.0
+oxylabs==2.0.0
+spider-client==0.0.27
+
+# File handling
+fsspec==2025.9.0
+filetype==1.2.0
+filelock==3.20.0
+
+# Graph and network processing
+networkx==3.5
+
+# Machine learning and data science
+numpy==2.3.4
+joblib==1.5.2
+
+# Image processing
+pillow==12.0.0
+
+# Markdown processing
+markdown-it-py==4.0.0
+mdurl==0.1.2
+
+# Template engine
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+
+# Serialization
+marshmallow==3.26.1
+
+# Configuration and packaging
+packaging==25.0
+setuptools==80.9.0
+platformdirs==4.5.0
+
+# Type checking and annotations
+typing_extensions==4.15.0
+typing-inspect==0.9.0
+typing-inspection==0.4.2
+mypy_extensions==1.1.0
+
+# Deprecation warnings
+Deprecated==1.2.18
+deprecation==2.1.0
+
+# Other utilities
+attrs==25.4.0
+decorator==5.2.1
+executing==2.2.1
+pure_eval==0.2.3
+stack-data==0.6.3
+traitlets==5.14.3
+wcwidth==0.2.14
+wrapt==1.17.3
+six==1.17.0
+soupsieve==2.8
+cssselect==1.3.0
+defusedxml==0.7.1
+sgmllib3k==1.0.0
+requests-file==3.0.1
+propcache==0.4.1
+sortedcontainers==2.4.0
+outcome==1.3.0.post0
+greenlet==3.2.4
+griffe==1.14.0
+grpcio==1.76.0
+protobuf==6.33.0
+jiter==0.11.1
+frozenlist==1.8.0
+aiosignal==1.4.0
+distro==1.9.0
+cffi==2.0.0
+pycparser==2.23
+annotated-types==0.7.0
+jedi==0.19.2
+parso==0.8.5
+prompt_toolkit==3.0.52
+Pygments==2.19.2
+matplotlib-inline==0.1.7
+pexpect==4.9.0
+ptyprocess==0.7.0
+asttokens==3.0.0
+bank==2.2.0
